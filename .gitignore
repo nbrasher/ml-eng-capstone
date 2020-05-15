@@ -1,2 +1,9 @@
 # Notebook checkpoints
 .ipynb_checkpoints/*
+train/.ipynb_checkpoints/*
+
+# Data
+data/*
+
+# Studio models
+model/*

@@ -1,12 +1,11 @@
-from sklearn.preprocessing import RobustScaler
-from keras.layers import Dropout, Dense
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.layers import Dropout, Dense
 import sagemaker_containers
 import tensorflow as tf
 import pandas as pd
 import numpy as np
 import argparse
 import pickle
-import keras
 import json
 import sys
 import os
@@ -15,10 +14,10 @@ def _get_train_data(training_dir):
     '''Retrieve training data'''
     train_data = pd.read_csv(os.path.join(training_dir, "train.csv"))
 
-    X_train = train_data.drop(['Class'], axis=1)
-    y_train = train_data['Class']
+    X = train_data.drop(['Class'], axis=1)
+    y = train_data['Class']
 
-    return X_train, y_train
+    return X, y
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -36,7 +35,8 @@ if __name__ == '__main__':
     # SageMaker Parameters
     parser.add_argument('--hosts', type=list, default=json.loads(os.environ['SM_HOSTS']))
     parser.add_argument('--current-host', type=str, default=os.environ['SM_CURRENT_HOST'])
-    parser.add_argument('--model-dir', type=str, default=os.environ['SM_MODEL_DIR'])
+    parser.add_argument('--model_dir', type=str)
+    parser.add_argument('--sm_model_dir', type=str, default=os.environ['SM_MODEL_DIR'])
     parser.add_argument('--data-dir', type=str, default=os.environ['SM_CHANNEL_TRAINING'])
     parser.add_argument('--num-gpus', type=int, default=os.environ['SM_NUM_GPUS'])
 
@@ -44,17 +44,21 @@ if __name__ == '__main__':
 
     # Get training data
     print('Reading training data...', end='', flush=True)
-    X_train, y_train = _get_train_data(args.data_dir)
+    X, y = _get_train_data(args.data_dir)
+    X_train, X_val, y_train, y_val = train_test_split(X.values, y.values, 
+                                                      test_size=0.3, 
+                                                      random_state=154)
     print('complete')
 
+    # Ensure using GPU
+    print('Num GPUs Available: ', len(tf.config.experimental.list_physical_devices('GPU')))
+    
     # Train model
     print('Training model...')
-    rs = RobustScaler()
-    X_train_scaled = rs.fit_transform(X_train)
 
-    model = keras.models.Sequential([
-        Dense(X_train_scaled.shape[1], 
-            input_dim=X_train_scaled.shape[1],
+    model = tf.keras.models.Sequential([
+        Dense(X_train.shape[1], 
+            input_dim=X_train.shape[1],
             activation='relu'),
         Dropout(0.5),
         Dense(16, activation='relu'),
@@ -64,14 +68,20 @@ if __name__ == '__main__':
     ])
 
     model.compile(
-        keras.optimizers.Adam(lr=args.learning_rate), 
+        tf.keras.optimizers.Adam(lr=args.learning_rate), 
         loss='binary_crossentropy',
         metrics=[tf.keras.metrics.AUC()]
     )
 
-    model.fit(X_train_sm, y_train_sm,
-        validation_split=0.2,
+    model.fit(X_train, y_train,
+        validation_data=(X_val, y_val),
         batch_size=args.batch_size,
         epochs=args.epochs, 
-        verbose=1,
+        verbose=2,
     )
+    
+    # Save trained model
+    tf_model_path = os.path.join(args.sm_model_dir, 'model1', '00001')
+    if not os.path.exists(tf_model_path):
+        os.makedirs(tf_model_path)
+    model.save(tf_model_path)
