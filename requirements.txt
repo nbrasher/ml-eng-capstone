@@ -1,6 +1,6 @@
 imbalanced-learn==0.6.2
 matplotlib==3.2.1
-numpy==1.18.1
+numpy==1.22.0
 pandas==1.0.1
 s3fs==0.4.2
 sagemaker==1.58.2
