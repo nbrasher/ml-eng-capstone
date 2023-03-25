@@ -6,4 +6,4 @@ s3fs==0.4.2
 sagemaker==1.58.2
 scikit-learn==0.22.1
 seaborn==0.10.0
-tensorflow==2.1.0
+tensorflow==2.11.1
